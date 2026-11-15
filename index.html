@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Brain MRI Tumor Classifier</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+</head>
+<body>
+  <h2>Brain MRI Scan Analyzer</h2>
+  <p>Select an MRI image file (.jpg or .png) to analyze:</p>
+  
+  <input type="file" id="imageUpload" accept="image/*" />
+  <br><br>
+  <img id="mriPreview" width="224" height="224" style="display:none; border: 1px solid #ccc;" />
+  <br>
+  <div id="label-container"></div>
+
+  <script type="text/javascript">
+    const URL = "./my_model/";
+    let model, labelContainer, maxPredictions;
+
+    // 1. Load the model immediately when the page opens
+    async function init() {
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+
+      labelContainer = document.getElementById("label-container");
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+    }
+
+    // 2. Listen for a file upload and run prediction on the image
+    document.getElementById("imageUpload").addEventListener("change", async function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const img = document.getElementById("mriPreview");
+      img.src = window.URL.createObjectURL(file);
+      img.style.display = "block";
+
+      img.onload = async function() {
+        // Note: flipped is set to false since MRI scans shouldn't be mirrored
+        const prediction = await model.predict(img, false);
+        for (let i = 0; i < maxPredictions; i++) {
+          const classPrediction =
+            prediction[i].className + ": " + (prediction[i].probability * 100).toFixed(1) + "%";
+          labelContainer.childNodes[i].innerHTML = classPrediction;
+        }
+      };
+    });
+
+    init();
+  </script>
+</body>
+</html>
