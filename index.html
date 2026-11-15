@@ -1,11 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Brain MRI Tumor Classifier</title>
-  <script src="https://unpkg.com"></script>
-  <script src="https://unpkg.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -27,7 +25,7 @@
       width: 100%;
       text-align: center;
     }
-    h1 {
+    h2 {
       margin: 0 0 8px 0;
       font-size: 24px;
       color: #0f172a;
@@ -35,16 +33,7 @@
     p.subtitle {
       color: #64748b;
       font-size: 14px;
-      margin-bottom: 20px;
-    }
-    #status {
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 12px;
-      border-radius: 8px;
-      background-color: #e0f2fe;
-      color: #0369a1;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
     .upload-btn {
       display: inline-block;
@@ -58,10 +47,6 @@
     }
     .upload-btn:hover {
       background-color: #1d4ed8;
-    }
-    .upload-btn.disabled {
-      background-color: #94a3b8;
-      cursor: not-allowed;
     }
     input[type="file"] {
       display: none;
@@ -103,7 +88,6 @@
       border-radius: 999px;
       transition: width 0.5s ease-out;
     }
-    /* Highlight the top prediction in blue */
     .result-row.top-match .progress-fill {
       background-color: #2563eb;
     }
@@ -121,18 +105,15 @@
   </style>
 </head>
 <body>
-
   <div class="card">
-    <h1>Brain MRI Analyzer</h1>
-    <p class="subtitle">Upload an axial brain MRI scan (.jpg or .png) to classify tumor types.</p>
-
-    <div id="status">Loading AI model...</div>
-
-    <label for="imageUpload" id="uploadLabel" class="upload-btn disabled">Choose MRI Scan</label>
-    <input type="file" id="imageUpload" accept="image/*" disabled />
-
-    <img id="mriPreview" alt="MRI Preview" />
-
+    <h2>Brain MRI Scan Analyzer</h2>
+    <p class="subtitle">Select an MRI image file (.jpg or .png) to analyze:</p>
+    
+    <label for="imageUpload" class="upload-btn">Choose MRI Scan</label>
+    <input type="file" id="imageUpload" accept="image/*" />
+    
+    <img id="mriPreview" width="224" height="224" />
+    
     <div id="label-container"></div>
 
     <div class="disclaimer">
@@ -142,62 +123,44 @@
 
   <script type="text/javascript">
     const URL = "./";
-    let model, maxPredictions;
-    const statusBox = document.getElementById("status");
-    const uploadInput = document.getElementById("imageUpload");
-    const uploadLabel = document.getElementById("uploadLabel");
-    const labelContainer = document.getElementById("label-container");
+    let model, labelContainer, maxPredictions;
 
+    // 1. Load the model immediately when the page opens
     async function init() {
-      try {
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
-        
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
 
-        statusBox.innerText = "Model ready — select an MRI scan to analyze";
-        statusBox.style.backgroundColor = "#dcfce7";
-        statusBox.style.color = "#15803d";
-        
-        uploadInput.disabled = false;
-        uploadLabel.classList.remove("disabled");
-      } catch (error) {
-        statusBox.innerText = "Error loading model: " + error.message;
-        statusBox.style.backgroundColor = "#fee2e2";
-        statusBox.style.color = "#b91c1c";
-      }
+      labelContainer = document.getElementById("label-container");
     }
 
-    uploadInput.addEventListener("change", function(event) {
-      const file = event.target.files;
+    // 2. Listen for a file upload and run prediction on the image
+    document.getElementById("imageUpload").addEventListener("change", async function(event) {
+      const file = event.target.files[0];
       if (!file) return;
-
-      statusBox.innerText = "Analyzing MRI scan...";
-      statusBox.style.backgroundColor = "#e0f2fe";
-      statusBox.style.color = "#0369a1";
 
       const img = document.getElementById("mriPreview");
       img.src = window.URL.createObjectURL(file);
       img.style.display = "block";
 
       img.onload = async function() {
-        const predictions = await model.predict(img, false);
+        // Note: flipped is set to false since MRI scans shouldn't be mirrored
+        const prediction = await model.predict(img, false);
         
-        // Sort results from highest confidence to lowest
-        predictions.sort((a, b) => b.probability - a.probability);
+        // Sort predictions from highest confidence to lowest
+        prediction.sort((a, b) => b.probability - a.probability);
 
-        // Clear previous results and build progress bars
         labelContainer.innerHTML = "";
-        predictions.forEach((pred, index) => {
-          const percent = (pred.probability * 100).toFixed(1);
-          const isTop = index === 0 ? "top-match" : "";
+        for (let i = 0; i < maxPredictions; i++) {
+          const percent = (prediction[i].probability * 100).toFixed(1);
+          const isTop = i === 0 ? "top-match" : "";
 
           const row = document.createElement("div");
           row.className = `result-row ${isTop}`;
           row.innerHTML = `
             <div class="result-header">
-              <span>${pred.className}</span>
+              <span>${prediction[i].className}</span>
               <span>${percent}%</span>
             </div>
             <div class="progress-bg">
@@ -205,16 +168,11 @@
             </div>
           `;
           labelContainer.appendChild(row);
-        });
-
-        statusBox.innerText = "Analysis complete";
-        statusBox.style.backgroundColor = "#dcfce7";
-        statusBox.style.color = "#15803d";
+        }
       };
     });
 
-    window.addEventListener("load", init);
+    init();
   </script>
-
 </body>
 </html>
